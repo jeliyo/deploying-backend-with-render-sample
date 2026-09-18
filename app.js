@@ -11,12 +11,12 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
 });
 
-// Bored API base URL
-const BORED_API_BASE_URL = 'https://www.boredapi.com/api/';
+// Bored API mirror URL
+const BORED_API_URL = 'https://bored-api.appbrewery.com/random';
 
 async function getRandomActivity() {
   try {
-    const response = await fetch(BORED_API_BASE_URL + 'activity');
+    const response = await fetch(BORED_API_URL);
     if (response.ok) {
       const data = await response.json();
       return data.activity;
@@ -24,23 +24,21 @@ async function getRandomActivity() {
       return null;
     }
   } catch (error) {
+    console.error('BoredAPI call failed:', error);
     return null;
   }
 }
 
 app.get('/insert_activity', async (req, res) => {
+  const activityName = await getRandomActivity();
+  if (!activityName) {
+    return res.status(400).json({ status: 'error', message: 'Unable to generate an activity from BoredAPI' });
+  }
   try {
-    const client = await pool.connect();
-    const activityName = await getRandomActivity();
-
-    if (activityName) {
-      await client.query('INSERT INTO my_activities (activity) VALUES ($1)', [activityName]);
-      client.release();
-      res.status(200).json({ status: 'success', message: `Activity "${activityName}" inserted successfully` });
-    } else {
-      res.status(400).json({ status: 'error', message: 'Unable to generate an activity from BoredAPI' });
-    }
+    await pool.query('INSERT INTO my_activities (activity) VALUES ($1)', [activityName]);
+    res.status(200).json({ status: 'success', message: `Activity "${activityName}" inserted successfully` });
   } catch (error) {
+    console.error('Insert failed:', error);
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
